@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#12203a">
+<title>Control de dispositivos</title>
+<style>
+  :root { --fondo:#f2f4f8; --panel:#fff; --texto:#1c2533; --tenue:#6a7486; --borde:#dfe4ec; --marca:#12203a;
+          --azul:#2563eb; --verde:#15803d; --verde-bg:#dcfce7; --ambar:#b45309; --ambar-bg:#fef3c7;
+          --rojo:#b91c1c; --rojo-bg:#fee2e2; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:16px/1.35 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; background:var(--fondo);
+         color:var(--texto); -webkit-tap-highlight-color:transparent; }
+  header { background:var(--marca); color:#fff; padding:10px 14px; display:flex; align-items:center; gap:10px; }
+  header h1 { font-size:16px; margin:0; flex:1; font-weight:600; }
+  header small { display:block; font-weight:400; opacity:.75; font-size:12px; }
+  button { font:inherit; border:1px solid var(--borde); background:var(--panel); color:var(--texto);
+           border-radius:10px; padding:10px 14px; }
+  button:active { filter:brightness(.93); }
+  button.primario { background:var(--azul); border-color:var(--azul); color:#fff; font-weight:600; }
+  button.chico { padding:6px 10px; font-size:13px; border-radius:8px; }
+  header button { background:transparent; color:#fff; border-color:rgba(255,255,255,.35); }
+  main { max-width:560px; margin:0 auto; padding:10px; display:flex; flex-direction:column; gap:10px; }
+  .tarjeta { background:var(--panel); border:1px solid var(--borde); border-radius:14px; padding:12px; }
+  #visor { position:relative; background:#000; border-radius:14px; overflow:hidden; aspect-ratio:4/3; max-height:44vh; }
+  #visor video { width:100%; height:100%; object-fit:cover; display:block; }
+  #visor .centro { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center;
+                   justify-content:center; gap:10px; color:#fff; text-align:center; padding:16px; }
+  #mira { position:absolute; inset:18% 24%; border:3px solid rgba(255,255,255,.8); border-radius:16px; display:none; }
+  #linterna { position:absolute; right:8px; bottom:8px; display:none; }
+  #aviso { border-radius:14px; padding:12px 14px; font-weight:600; font-size:20px; text-align:center;
+           background:var(--panel); border:1px solid var(--borde); min-height:54px; }
+  #aviso small { display:block; font-weight:400; font-size:13px; }
+  #aviso.ok { background:var(--verde-bg); color:var(--verde); border-color:#86efac; }
+  #aviso.repetido { background:var(--ambar-bg); color:var(--ambar); border-color:#fcd34d; }
+  #aviso.error { background:var(--rojo-bg); color:var(--rojo); border-color:#fca5a5; }
+  .fila { display:flex; gap:8px; align-items:center; }
+  .fila > * { min-width:0; }
+  select, input { font:inherit; padding:10px; border:1px solid var(--borde); border-radius:10px; background:#fff;
+                  color:var(--texto); }
+  #numero { flex:1; font-size:20px; font-weight:600; }
+  .contadores { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; text-align:center; }
+  .contadores b { display:block; font-size:24px; }
+  .contadores span { font-size:12px; color:var(--tenue); }
+  nav { display:flex; gap:6px; }
+  nav button { flex:1; padding:8px 4px; font-size:14px; }
+  nav button.activa { background:var(--marca); color:#fff; border-color:var(--marca); }
+  .lista { margin:10px 0 0; padding:0; list-style:none; max-height:46vh; overflow:auto; }
+  .lista li { display:flex; align-items:center; gap:8px; padding:8px 2px; border-top:1px solid var(--borde); }
+  .lista li b { flex:1; }
+  .lista li small { color:var(--tenue); }
+  .chips { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; max-height:46vh; overflow:auto; }
+  .chips span { background:var(--rojo-bg); color:var(--rojo); border-radius:8px; padding:4px 9px; font-weight:600; }
+  pre { margin:10px 0; white-space:pre-wrap; word-break:break-word; font:15px/1.5 ui-monospace,Consolas,monospace;
+        background:var(--fondo); border-radius:10px; padding:10px; }
+  .tenue { color:var(--tenue); font-size:13px; }
+  #red { font-size:12px; text-align:center; color:var(--tenue); }
+  #red.mal { color:var(--rojo); font-weight:600; }
+  .oculto { display:none !important; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Control de dispositivos<small id="tituloControl">—</small></h1>
+  <button class="chico" id="btnNuevo">Nuevo control</button>
+</header>
+
+<main id="pantallaConfig" class="oculto">
+  <div class="tarjeta">
+    <b>Conectar con la planilla</b>
+    <p class="tenue">Pegá la dirección de la aplicación web de la planilla (termina en <code>/exec</code>). Se pide una sola vez.</p>
+    <input id="apiUrl" style="width:100%" placeholder="https://script.google.com/macros/s/…/exec" autocomplete="off">
+    <p><button class="primario" id="btnConectar" style="width:100%">Conectar</button></p>
+    <div id="configError" class="tenue"></div>
+  </div>
+</main>
+
+<main id="pantallaLector" class="oculto">
+  <div id="visor">
+    <video id="video" playsinline muted></video>
+    <div id="mira"></div>
+    <div class="centro" id="visorCentro">
+      <button class="primario" id="btnCamara">📷  Iniciar cámara</button>
+      <div class="tenue" id="camaraError" style="color:#cbd5e1"></div>
+    </div>
+    <button class="chico" id="linterna">🔦</button>
+  </div>
+
+  <div id="aviso">Listo para escanear</div>
+
+  <form class="fila tarjeta" id="formManual">
+    <select id="familia"></select>
+    <input id="numero" inputmode="numeric" pattern="[0-9]*" placeholder="N° a mano" autocomplete="off">
+    <button class="primario" type="submit">Agregar</button>
+  </form>
+
+  <div class="tarjeta contadores">
+    <div><b id="cEscaneados">0</b><span>escaneados</span></div>
+    <div><b id="cFaltan">0</b><span>faltan</span></div>
+    <div><b id="cOtros">0</b><span>otros (F)</span></div>
+  </div>
+  <div id="red">—</div>
+
+  <div class="tarjeta">
+    <nav>
+      <button data-vista="escaneados" class="activa">Escaneados</button>
+      <button data-vista="faltan">Faltan</button>
+      <button data-vista="novedades">Novedades</button>
+    </nav>
+    <div id="vista-escaneados"><ul class="lista" id="listaEscaneados"></ul></div>
+    <div id="vista-faltan" class="oculto"><div class="chips" id="listaFaltan"></div></div>
+    <div id="vista-novedades" class="oculto">
+      <pre id="textoNovedades"></pre>
+      <button class="primario" id="btnCopiar" style="width:100%">Copiar texto</button>
+      <p class="tenue">El mismo texto queda en la hoja «Novedades» de la planilla.</p>
+    </div>
+  </div>
+  <p class="tenue" style="text-align:center"><a href="#" id="btnDesconectar">Cambiar la dirección de la planilla</a></p>
+</main>
+
+<script>/*CONFIG*/</script>
+
+<script id="logica">
+// ═════════════ Lógica pura (sin pantalla): se puede probar por separado ═════════════
+function limpiarId(valor) {
+  var texto = String(valor == null ? '' : valor).trim();
+  var m = texto.match(/\d+/);
+  return m ? m[0] : texto;
+}
+
+/** 'RAMOS19', 'ramos 19', 'RAMOS-19' -> {familia, numero, nombre:'RAMOS 19'}; si no se entiende, null. */
+function partirNombre(texto) {
+  var m = String(texto == null ? '' : texto).trim().match(/^([A-Za-zÁÉÍÓÚÑáéíóúñ]+)[\s_.-]*(\d+)$/);
+  if (!m) return null;
+  var familia = m[1].toUpperCase(), numero = parseInt(m[2], 10);
+  return { familia: familia, numero: numero, nombre: familia + ' ' + numero };
+}
+
+/** Índices para buscar un equipo por ID (solo los números) o por nombre. */
+function indexarEquipos(equipos) {
+  var porId = {}, porNombre = {};
+  (equipos || []).forEach(function (e) {
+    var p = partirNombre(e.nombre);
+    if (!p) return;
+    var eq = { id: String(e.id), nombre: p.nombre, familia: p.familia, numero: p.numero };
+    porId[limpiarId(e.id)] = eq;
+    porNombre[p.nombre] = eq;
+  });
+  return { porId: porId, porNombre: porNombre };
+}
+
+/** Interpreta lo leído en un QR. Acepta las etiquetas viejas ('RAMOS19|844183CT'), las nuevas
+ *  (solo el ID: '844183CT') y también solo el nombre ('RAMOS 19').
+ *  Devuelve {clave, nombre, id, familia, numero, conocido}. */
+function interpretar(texto, indice) {
+  texto = String(texto || '').trim();
+  var nombre = null, id = '';
+  if (texto.indexOf('|') >= 0) {
+    var partes = texto.split('|');
+    nombre = partirNombre(partes[0]);
+    id = partes.slice(1).join('|').trim();
+  } else {
+    nombre = partirNombre(texto);      // letras y después número = nombre; cualquier otra cosa = ID
+    if (!nombre) id = texto;
+  }
+  var eq = (id && indice.porId[limpiarId(id)]) || (nombre && indice.porNombre[nombre.nombre]) || null;
+  if (eq && !nombre) nombre = { nombre: eq.nombre, familia: eq.familia, numero: eq.numero };
+  if (eq && !id) id = eq.id;
+  return { clave: nombre ? nombre.nombre : 'ID ' + limpiarId(id), nombre: nombre ? nombre.nombre : '',
+           id: id, familia: nombre ? nombre.familia : '', numero: nombre ? nombre.numero : null,
+           conocido: !!eq };
+}
+
+function renglonesNovedades(numeros, porRenglon, separador) {
+  var vistos = {}, unicos = [];
+  numeros.forEach(function (n) { if (n != null && !vistos[n]) { vistos[n] = true; unicos.push(Number(n)); } });
+  unicos.sort(function (a, b) { return a - b; });
+  var renglones = [];
+  for (var i = 0; i < unicos.length; i += porRenglon) renglones.push(unicos.slice(i, i + porRenglon).join(separador));
+  return renglones;
+}
+
+function nombreControl(fecha) {
+  function dd(n) { return (n < 10 ? '0' : '') + n; }
+  return 'Control ' + dd(fecha.getDate()) + '-' + dd(fecha.getMonth() + 1) + ' ' + dd(fecha.getHours()) + ':' + dd(fecha.getMinutes());
+}
+</script>
+
+<script>
+// ═════════════ Pantalla ═════════════
+(function () {
+  var CLAVE_LS = 'controlDispositivos.v1';
+  var HORAS_CONTROL = 12;          // pasado este tiempo, al abrir arranca un control nuevo
+  var $ = function (id) { return document.getElementById(id); };
+  var E = { api: '', control: '', inicio: 0, registros: [], anular: [], equipos: [],
+            cfg: { familiaPrincipal: 'RAMOS', porRenglon: 12, separador: ' - ' } };
+  var indice = indexarEquipos([]);
+  var enviando = false, redMal = false, ultimo = { texto: '', t: 0 };
+  var stream = null, detector = null, lienzo = null, audio = null;
+
+  // ---------- guardado local (si se corta la señal o se cierra la página, no se pierde nada) ----------
+  function guardar() { try { localStorage.setItem(CLAVE_LS, JSON.stringify(E)); } catch (e) {} }
+  function cargar() {
+    try {
+      var d = JSON.parse(localStorage.getItem(CLAVE_LS) || 'null');
+      if (d) for (var k in E) if (d[k] !== undefined) E[k] = d[k];
+    } catch (e) {}
+  }
+
+  function llamar(datos) {
+    return fetch(E.api, { method: 'POST', redirect: 'follow',
+                          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                          body: JSON.stringify(datos) })
+      .then(function (r) { return r.json(); })
+      .then(function (j) { if (!j || !j.ok) throw new Error((j && j.error) || 'Respuesta inesperada'); return j; });
+  }
+
+  // ---------- avisos ----------
+  function pitido(tipo) {
+    try {
+      if (!audio) audio = new (window.AudioContext || window.webkitAudioContext)();
+      var o = audio.createOscillator(), g = audio.createGain();
+      o.frequency.value = tipo === 'ok' ? 1100 : tipo === 'repetido' ? 520 : 240;
+      g.gain.value = 0.15;
+      o.connect(g); g.connect(audio.destination);
+      o.start(); o.stop(audio.currentTime + (tipo === 'ok' ? 0.09 : 0.28));
+    } catch (e) {}
+    if (navigator.vibrate) navigator.vibrate(tipo === 'ok' ? 60 : [80, 60, 80]);
+  }
+  function aviso(tipo, titulo, detalle) {
+    var a = $('aviso');
+    a.className = tipo;
+    a.textContent = titulo;
+    if (detalle) { var s = document.createElement('small'); s.textContent = detalle; a.appendChild(s); }
+    pitido(tipo);
+  }
+
+  // ---------- registrar ----------
+  function registrar(eq, origen) {
+    var existente = E.registros.filter(function (r) { return r.clave === eq.clave; })[0];
+    if (existente) {
+      aviso('repetido', (eq.nombre || eq.id) + ' ya estaba', 'Escaneado a las ' + hora(existente.hora));
+      return;
+    }
+    E.registros.push({ uid: Date.now().toString(36) + Math.random().toString(36).slice(2, 8), clave: eq.clave,
+                       nombre: eq.nombre, id: eq.id, familia: eq.familia, numero: eq.numero,
+                       origen: origen, hora: Date.now(), enviado: false });
+    guardar();
+    if (eq.conocido) aviso('ok', eq.nombre, origen === 'Manual' ? 'Cargado a mano' : eq.id);
+    else aviso('error', eq.nombre || eq.id, 'No está en la lista de equipos: se registró igual');
+    pintar();
+    sincronizar();
+  }
+
+  function alLeer(texto) {
+    var ahora = Date.now();
+    if (texto === ultimo.texto && ahora - ultimo.t < 2500) return;   // el mismo código sigue frente a la cámara
+    ultimo = { texto: texto, t: ahora };
+    registrar(interpretar(texto, indice), 'QR');
+  }
+
+  var pendienteManual = null;
+  function manual(ev) {
+    ev.preventDefault();
+    var n = parseInt($('numero').value, 10);
+    if (!(n > 0)) { $('numero').focus(); return; }
+    var nombre = $('familia').value + ' ' + n;
+    var eq = interpretar(nombre, indice);
+    if (!eq.conocido && pendienteManual !== nombre) {
+      pendienteManual = nombre;
+      aviso('error', nombre + ' no está en la lista', 'Si el número es correcto, tocá «Agregar» otra vez para registrarlo igual');
+      return;
+    }
+    pendienteManual = null;
+    $('numero').value = '';
+    registrar(eq, 'Manual');
+  }
+
+  function quitar(uid) {
+    var r = E.registros.filter(function (x) { return x.uid === uid; })[0];
+    if (!r || !window.confirm('¿Quitar ' + (r.nombre || r.id) + ' de este control?')) return;
+    E.registros = E.registros.filter(function (x) { return x.uid !== uid; });
+    if (r.enviado) E.anular.push(uid);
+    guardar(); pintar(); sincronizar();
+  }
+
+  // ---------- envío a la planilla (en segundo plano, con reintentos) ----------
+  function sincronizar() {
+    if (enviando || !E.api) return;
+    var pendientes = E.registros.filter(function (r) { return !r.enviado; });
+    var tarea;
+    if (pendientes.length) {
+      tarea = llamar({ accion: 'registrar', control: E.control, registros: pendientes }).then(function (j) {
+        E.registros.forEach(function (r) { if (j.guardados.indexOf(r.uid) >= 0) r.enviado = true; });
+      });
+    } else if (E.anular.length) {
+      var uid = E.anular[0];
+      tarea = llamar({ accion: 'anular', control: E.control, uid: uid }).then(function () {
+        E.anular = E.anular.filter(function (u) { return u !== uid; });
+      });
+    } else { pintarRed(); return; }
+    enviando = true; pintarRed();
+    tarea.then(function () { redMal = false; }, function () { redMal = true; })
+      .then(function () {
+        enviando = false; guardar(); pintarRed();
+        var queda = E.registros.some(function (r) { return !r.enviado; }) || E.anular.length;
+        if (queda) setTimeout(sincronizar, redMal ? 5000 : 50);
+      });
+  }
+  window.addEventListener('online', sincronizar);
+
+  // ---------- pantalla ----------
+  function hora(ms) { var d = new Date(ms); return d.toTimeString().slice(0, 5); }
+  function pintarRed() {
+    var p = E.registros.filter(function (r) { return !r.enviado; }).length + E.anular.length;
+    var el = $('red');
+    el.className = redMal && p ? 'mal' : '';
+    el.textContent = !p ? '✓ Todo guardado en la planilla'
+      : redMal ? '⚠ Sin conexión: ' + p + ' sin enviar. Quedan guardados en el teléfono y se envían solos.'
+      : '⏳ Enviando ' + p + '…';
+  }
+  function pintar() {
+    var principal = E.cfg.familiaPrincipal;
+    $('tituloControl').textContent = E.control || '—';
+    var propios = E.registros.filter(function (r) { return !r.familia || r.familia === principal; });
+    var claves = {};
+    E.registros.forEach(function (r) { claves[r.clave] = true; });
+    var faltan = E.equipos.map(function (e) { return partirNombre(e.nombre); })
+      .filter(function (p) { return p && p.familia === principal && !claves[p.nombre]; })
+      .sort(function (a, b) { return a.numero - b.numero; });
+    $('cEscaneados').textContent = propios.length;
+    $('cFaltan').textContent = faltan.length;
+    $('cOtros').textContent = E.registros.length - propios.length;
+
+    var ul = $('listaEscaneados');
+    ul.textContent = '';
+    E.registros.slice().reverse().forEach(function (r) {
+      var li = document.createElement('li'), b = document.createElement('b'), s = document.createElement('small'),
+          q = document.createElement('button');
+      b.textContent = r.nombre || r.id;
+      s.textContent = hora(r.hora) + (r.origen === 'Manual' ? ' · a mano' : '') + (r.enviado ? '' : ' · ⏳');
+      q.textContent = 'Quitar'; q.className = 'chico';
+      q.onclick = function () { quitar(r.uid); };
+      li.appendChild(b); li.appendChild(s); li.appendChild(q); ul.appendChild(li);
+    });
+    if (!E.registros.length) ul.innerHTML = '<li class="tenue">Todavía no hay equipos en este control.</li>';
+
+    var cont = $('listaFaltan');
+    cont.textContent = '';
+    faltan.forEach(function (p) { var c = document.createElement('span'); c.textContent = p.numero; cont.appendChild(c); });
+    if (!faltan.length) cont.innerHTML = '<div class="tenue">' + (E.equipos.length ? '✅ No falta ninguno.' : 'La hoja «Equipos» está vacía.') + '</div>';
+
+    var renglones = renglonesNovedades(propios.map(function (r) { return r.numero; }), E.cfg.porRenglon, E.cfg.separador);
+    $('textoNovedades').textContent = renglones.join('\n') || '(sin equipos)';
+    pintarRed();
+  }
+
+  function llenarFamilias() {
+    var familias = [E.cfg.familiaPrincipal];
+    E.equipos.forEach(function (e) { var p = partirNombre(e.nombre); if (p && familias.indexOf(p.familia) < 0) familias.push(p.familia); });
+    var sel = $('familia');
+    sel.textContent = '';
+    familias.forEach(function (f) { var o = document.createElement('option'); o.textContent = f; sel.appendChild(o); });
+  }
+
+  // ---------- controles (rondas) ----------
+  function nuevoControl(preguntar) {
+    if (preguntar && E.registros.length &&
+        !window.confirm('¿Empezar un control nuevo?\nEl actual (' + E.registros.length + ' equipos) queda guardado en la planilla.')) return;
+    var sinEnviar = E.registros.filter(function (r) { return !r.enviado; });
+    if (sinEnviar.length || E.anular.length) {
+      window.alert('Todavía hay datos sin enviar del control actual. Esperá a tener conexión y probá de nuevo.');
+      return;
+    }
+    E.control = nombreControl(new Date()); E.inicio = Date.now(); E.registros = [];
+    guardar(); pintar();
+    $('aviso').className = ''; $('aviso').textContent = 'Control nuevo: listo para escanear';
+  }
+
+  // ---------- cámara ----------
+  function cargarJsQR() {
+    return new Promise(function (ok, mal) {
+      if (window.jsQR) return ok();
+      var s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js';
+      s.onload = ok; s.onerror = function () { mal(new Error('No se pudo cargar el lector de respaldo.')); };
+      document.head.appendChild(s);
+    });
+  }
+  function iniciarCamara() {
+    $('camaraError').textContent = 'Abriendo la cámara…';
+    try { audio = audio || new (window.AudioContext || window.webkitAudioContext)(); audio.resume(); } catch (e) {}
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      $('camaraError').textContent = 'Este navegador no deja usar la cámara desde acá. Podés cargar los equipos a mano.';
+      return;
+    }
+    navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: { ideal: 'environment' },
+                                                                 width: { ideal: 1280 }, height: { ideal: 720 } } })
+      .then(function (s) {
+        stream = s;
+        var v = $('video'); v.srcObject = s;
+        return v.play();
+      })
+      .then(function () {
+        if (!('BarcodeDetector' in window)) return cargarJsQR();
+        return window.BarcodeDetector.getSupportedFormats().then(function (f) {
+          if (f.indexOf('qr_code') >= 0) detector = new window.BarcodeDetector({ formats: ['qr_code'] });
+          else return cargarJsQR();
+        });
+      })
+      .then(function () {
+        $('visorCentro').classList.add('oculto'); $('mira').style.display = 'block';
+        var pista = stream.getVideoTracks()[0], cap = pista.getCapabilities ? pista.getCapabilities() : {};
+        if (cap.torch) {
+          var luz = false, b = $('linterna');
+          b.style.display = 'block';
+          b.onclick = function () { luz = !luz; pista.applyConstraints({ advanced: [{ torch: luz }] }).catch(function () {}); };
+        }
+        bucle();
+      })
+      .catch(function (e) {
+        if (stream) { stream.getTracks().forEach(function (t) { t.stop(); }); stream = null; }
+        var bloqueada = e && (e.name === 'NotAllowedError' || e.name === 'SecurityError');
+        $('camaraError').textContent = bloqueada
+          ? (window.API_URL ? 'La cámara está bloqueada en esta dirección. Usá el lector publicado en la otra dirección (ver instrucciones). Mientras tanto podés cargar a mano.'
+                            : 'No hay permiso para usar la cámara. Tocá el candado de la barra de direcciones → Permisos → Cámara → Permitir, y recargá.')
+          : 'No se pudo abrir la cámara: ' + (e && e.message || e);
+      });
+  }
+  function bucle() {
+    if (!stream) return;
+    var v = $('video'), paso;
+    if (v.readyState < 2) { setTimeout(bucle, 150); return; }
+    if (detector) {
+      paso = detector.detect(v).then(function (cs) { cs.forEach(function (c) { if (c.rawValue) alLeer(c.rawValue); }); });
+    } else {
+      paso = new Promise(function (ok) {
+        var escala = Math.min(1, 640 / v.videoWidth), w = Math.round(v.videoWidth * escala), h = Math.round(v.videoHeight * escala);
+        lienzo = lienzo || document.createElement('canvas');
+        lienzo.width = w; lienzo.height = h;
+        var ctx = lienzo.getContext('2d', { willReadFrequently: true });
+        ctx.drawImage(v, 0, 0, w, h);
+        var r = window.jsQR(ctx.getImageData(0, 0, w, h).data, w, h, { inversionAttempts: 'dontInvert' });
+        if (r && r.data) alLeer(r.data);
+        ok();
+      });
+    }
+    paso.catch(function () {}).then(function () { setTimeout(bucle, 120); });
+  }
+
+  // ---------- arranque ----------
+  function mostrar(pantalla) {
+    $('pantallaConfig').classList.toggle('oculto', pantalla !== 'config');
+    $('pantallaLector').classList.toggle('oculto', pantalla !== 'lector');
+    $('btnNuevo').classList.toggle('oculto', pantalla !== 'lector');
+  }
+  function conectar() {
+    var url = $('apiUrl').value.trim();
+    if (!/^https:\/\/script\.google\.com\/.+\/exec$/.test(url)) {
+      $('configError').textContent = 'La dirección tiene que empezar con https://script.google.com/ y terminar en /exec';
+      return;
+    }
+    E.api = url;
+    $('configError').textContent = 'Conectando…';
+    iniciar(true);
+  }
+  function iniciar(desdeConfig) {
+    llamar({ accion: 'inicio', control: E.control }).then(function (j) {
+      E.equipos = j.equipos || [];
+      E.cfg = { familiaPrincipal: j.familiaPrincipal || 'RAMOS', porRenglon: j.porRenglon || 12, separador: j.separador || ' - ' };
+      var locales = {};
+      E.registros.forEach(function (r) { locales[r.uid] = true; });
+      indice = indexarEquipos(E.equipos);
+      (j.registros || []).forEach(function (s) {            // lo que la planilla ya tiene de este control
+        if (locales[s.uid] || E.anular.indexOf(s.uid) >= 0) return;
+        var eq = interpretar(s.nombre && s.nombre !== 'SIN NOMBRE' ? s.nombre : s.id, indice);
+        E.registros.push({ uid: s.uid, clave: eq.clave, nombre: eq.nombre, id: s.id, familia: eq.familia,
+                           numero: eq.numero, origen: s.origen, hora: s.hora, enviado: true });
+      });
+      E.registros.sort(function (a, b) { return a.hora - b.hora; });
+      listo();
+    }).catch(function (e) {
+      if (desdeConfig || !E.equipos.length && !E.registros.length) {
+        E.api = desdeConfig ? '' : E.api;
+        mostrar('config');
+        $('apiUrl').value = $('apiUrl').value || E.api;
+        $('configError').textContent = 'No se pudo conectar con la planilla (' + e.message + '). Revisá la dirección y la conexión.';
+      } else {
+        redMal = true; indice = indexarEquipos(E.equipos); listo();   // sin señal: se sigue con lo guardado
+      }
+    });
+  }
+  function listo() {
+    guardar(); llenarFamilias(); mostrar('lector'); pintar(); sincronizar();
+  }
+
+  cargar();
+  if (window.API_URL) E.api = window.API_URL;
+  var enHash = /[#&]api=([^&]+)/.exec(location.hash || '');
+  if (enHash) E.api = decodeURIComponent(enHash[1]);
+  var vencido = !E.control || Date.now() - E.inicio > HORAS_CONTROL * 3600000;
+  if (vencido && !E.registros.some(function (r) { return !r.enviado; }) && !E.anular.length) {
+    E.control = nombreControl(new Date()); E.inicio = Date.now(); E.registros = [];
+  }
+  indice = indexarEquipos(E.equipos);
+
+  $('btnConectar').onclick = conectar;
+  $('btnCamara').onclick = iniciarCamara;
+  $('btnNuevo').onclick = function () { nuevoControl(true); };
+  $('formManual').onsubmit = manual;
+  $('btnDesconectar').onclick = function (ev) { ev.preventDefault(); $('apiUrl').value = E.api; mostrar('config'); };
+  $('btnCopiar').onclick = function () {
+    var texto = $('textoNovedades').textContent, b = $('btnCopiar');
+    function hecho() { b.textContent = '✓ Copiado'; setTimeout(function () { b.textContent = 'Copiar texto'; }, 1800); }
+    function respaldo() {
+      var t = document.createElement('textarea'); t.value = texto; document.body.appendChild(t); t.select();
+      try { document.execCommand('copy'); hecho(); } catch (e) {} document.body.removeChild(t);
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(texto).then(hecho, respaldo);
+    else respaldo();
+  };
+  Array.prototype.forEach.call(document.querySelectorAll('nav button'), function (b) {
+    b.onclick = function () {
+      Array.prototype.forEach.call(document.querySelectorAll('nav button'), function (x) { x.classList.toggle('activa', x === b); });
+      ['escaneados', 'faltan', 'novedades'].forEach(function (v) { $('vista-' + v).classList.toggle('oculto', v !== b.dataset.vista); });
+    };
+  });
+
+  if (E.api) { mostrar('lector'); llenarFamilias(); pintar(); iniciar(false); }
+  else mostrar('config');
+})();
+</script>
+</body>
+</html>
