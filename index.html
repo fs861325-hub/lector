@@ -495,6 +495,11 @@ function nombreControl(fecha) {
     guardar(); llenarFamilias(); mostrar('lector'); pintar(); sincronizar();
   }
 
+  // Para que el lector abra aunque no haya señal (solo cuando está publicado en un sitio propio, p. ej. GitHub Pages)
+  if ('serviceWorker' in navigator && location.protocol === 'https:' && !/google/.test(location.hostname)) {
+    navigator.serviceWorker.register('sw.js').catch(function () {});
+  }
+
   cargar();
   if (window.API_URL) E.api = window.API_URL;
   var enHash = /[#&]api=([^&]+)/.exec(location.hash || '');
