@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#12203a">
+<title>Cubetas farmacia</title>
+<style>
+  :root { --fondo:#f2f4f8; --panel:#fff; --texto:#1c2533; --tenue:#6a7486; --borde:#dfe4ec; --marca:#12203a;
+          --azul:#2563eb; --verde:#15803d; --verde-bg:#dcfce7; --ambar:#b45309; --ambar-bg:#fef3c7;
+          --rojo:#b91c1c; --rojo-bg:#fee2e2; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:16px/1.35 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; background:var(--fondo);
+         color:var(--texto); -webkit-tap-highlight-color:transparent; }
+  header { background:var(--marca); color:#fff; padding:10px 14px; }
+  header h1 { font-size:16px; margin:0; font-weight:600; }
+  header small { display:block; font-weight:400; opacity:.75; font-size:12px; }
+  main { max-width:560px; margin:0 auto; padding:10px; display:flex; flex-direction:column; gap:10px; }
+  .tarjeta { background:var(--panel); border:1px solid var(--borde); border-radius:14px; padding:12px; }
+  button, .boton { font:inherit; border:1px solid var(--borde); background:var(--panel); color:var(--texto);
+           border-radius:10px; padding:11px 14px; display:inline-block; text-align:center; cursor:pointer; }
+  button:active, .boton:active { filter:brightness(.93); }
+  button:disabled { opacity:.5; }
+  .primario { background:var(--azul); border-color:var(--azul); color:#fff; font-weight:600; }
+  .grande { width:100%; padding:18px; font-size:19px; }
+  .chico { padding:6px 10px; font-size:13px; border-radius:8px; }
+  label { display:block; font-size:12px; color:var(--tenue); margin:10px 0 3px; }
+  select, input[type=text], input[type=tel] { font:inherit; width:100%; padding:10px; border:1px solid var(--borde);
+           border-radius:10px; background:#fff; color:var(--texto); }
+  .fila { display:flex; gap:8px; align-items:flex-end; }
+  .fila > div { flex:1; min-width:0; }
+  .angosto { flex:0 0 76px !important; }
+  .letra { flex:0 0 100px !important; }
+  .fuerte { font-size:20px; font-weight:600; }
+  #aviso { border-radius:14px; padding:12px 14px; font-weight:600; text-align:center; background:var(--panel);
+           border:1px solid var(--borde); }
+  #aviso.ok { background:var(--verde-bg); color:var(--verde); border-color:#86efac; }
+  #aviso.error { background:var(--rojo-bg); color:var(--rojo); border-color:#fca5a5; }
+  #estadoCola { font-size:13px; text-align:center; color:var(--tenue); }
+  #estadoCola.mal { color:var(--ambar); font-weight:600; }
+  #avisos { margin:10px 0 0; padding:8px 10px 8px 26px; background:var(--ambar-bg); color:var(--ambar);
+            border-radius:10px; font-size:14px; }
+  .miniatura { width:100%; max-height:170px; object-fit:contain; border-radius:10px; background:#000; }
+  .lista { margin:8px 0 0; padding:0; list-style:none; }
+  .lista li { display:flex; align-items:center; gap:8px; padding:8px 2px; border-top:1px solid var(--borde); }
+  .lista li div { flex:1; min-width:0; }
+  .lista small { color:var(--tenue); display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  #tarjetaRevisar { border-color:#fcd34d; background:#fffbeb; }
+  .tenue { color:var(--tenue); font-size:13px; }
+  #turnos { display:flex; gap:6px; }
+  #turnos button { flex:1; padding:9px 4px; }
+  #turnos button.activo { background:var(--marca); color:#fff; border-color:var(--marca); font-weight:600; }
+  .oculto { display:none !important; }
+</style>
+</head>
+<body>
+<header><h1>Cubetas · Farmacia<small id="subtitulo">—</small></h1></header>
+
+<main id="pantallaConfig" class="oculto">
+  <div class="tarjeta">
+    <b>Conectar con la planilla</b>
+    <p class="tenue">Pegá la dirección de la aplicación web de la planilla (termina en <code>/exec</code>). Se pide una sola vez.</p>
+    <input type="text" id="apiUrl" placeholder="https://script.google.com/macros/s/…/exec" autocomplete="off">
+    <p><button class="primario grande" id="btnConectar">Conectar</button></p>
+    <div id="configError" class="tenue"></div>
+  </div>
+</main>
+
+<main id="pantallaInicio" class="oculto">
+  <div id="turnos"><button data-turno="Mañana">☀️  Mañana</button><button data-turno="Tarde">🌙  Tarde</button></div>
+  <div id="aviso">Sacá la foto de la etiqueta de la cubeta</div>
+  <label class="boton primario grande" for="foto">📷  Foto de la etiqueta</label>
+  <input type="file" id="foto" accept="image/*" capture="environment" class="oculto">
+  <button id="btnSinFoto">Cargar sin foto</button>
+  <div id="estadoCola">—</div>
+
+  <div class="tarjeta oculto" id="tarjetaRevisar">
+    <b>Para revisar: <span id="cuentaRevisar">0</span></b>
+    <ul class="lista" id="listaRevisar"></ul>
+  </div>
+  <div class="tarjeta">
+    <b>Cargados: <span id="contador">0</span></b>
+    <ul class="lista" id="listaCargados"></ul>
+  </div>
+  <p class="tenue" style="text-align:center"><a href="#" id="btnDesconectar">Cambiar la dirección de la planilla</a></p>
+</main>
+
+<!-- Después de la foto: solo falta decir qué dispositivo va en la cubeta -->
+<main id="pantallaDispositivo" class="oculto">
+  <img id="fotoNueva" class="miniatura" alt="">
+  <div class="tarjeta">
+    <b>¿Qué dispositivo va en esta cubeta?</b>
+    <div class="fila" style="margin-top:8px">
+      <div class="letra"><select id="famNueva" class="fuerte">
+        <option value="F">F</option><option value="R">R</option><option value="">sin letra</option></select></div>
+      <div><input type="tel" id="numNueva" class="fuerte" placeholder="N°" maxlength="4" autocomplete="off"></div>
+    </div>
+    <p class="tenue">La etiqueta se lee sola y se guarda en la planilla. Si no hay señal, queda en cola y se envía al volver.</p>
+  </div>
+  <button class="primario grande" id="btnListo">Listo ✓</button>
+  <button id="btnDescartarFoto">Descartar la foto</button>
+</main>
+
+<main id="pantallaRevision" class="oculto">
+  <img id="miniatura" class="miniatura" alt="">
+  <div class="tarjeta">
+    <b id="tituloRevision">Revisá y completá</b>
+    <ul id="avisos" class="oculto"></ul>
+    <label>Reparto</label>
+    <select id="selBloque"></select>
+    <label>Cliente (lleva la X)</label>
+    <select id="selCliente"></select>
+    <div class="fila">
+      <div><label>Pedido (4 dígitos)</label><input type="tel" id="pedido" class="fuerte" maxlength="6" autocomplete="off"></div>
+      <div class="angosto"><label>Cubeta</label><input type="tel" id="cubeta" class="fuerte" maxlength="2" autocomplete="off"></div>
+      <div class="angosto"><label>de</label><input type="tel" id="total" class="fuerte" maxlength="2" autocomplete="off"></div>
+    </div>
+    <label>Dispositivo GPS que va en la cubeta</label>
+    <div class="fila">
+      <div class="letra"><select id="familia" class="fuerte">
+        <option value="F">F</option><option value="R">R</option><option value="">sin letra</option></select></div>
+      <div><input type="tel" id="numero" class="fuerte" placeholder="N°" maxlength="4" autocomplete="off"></div>
+    </div>
+  </div>
+  <button class="primario grande" id="btnGuardar">Guardar</button>
+  <button id="btnVolver">Volver (queda para después)</button>
+  <button id="btnEliminar">Eliminar esta carga</button>
+</main>
+
+<script>window.API_URL = "__API_URL__";</script>
+<script id="logica">
+// ═════════════ Lógica pura (se prueba por separado) ═════════════
+function dosDigitos(n) { return (n < 10 ? '0' : '') + n; }
+function diaDe(fecha) { return dosDigitos(fecha.getDate()) + '-' + dosDigitos(fecha.getMonth() + 1) + '-' + fecha.getFullYear(); }
+function horaDe(ms) { var d = new Date(ms); return dosDigitos(d.getHours()) + ':' + dosDigitos(d.getMinutes()); }
+
+/** 'F' + '054' -> 'F-54' ; '' + '84' -> '84' ; sin número -> '' */
+function armarDispositivo(familia, numero) {
+  var n = parseInt(String(numero || '').replace(/\D/g, ''), 10);
+  if (!(n > 0)) return '';
+  return familia ? familia + '-' + n : String(n);
+}
+/** 'F-54' -> {familia:'F', numero:'54'} ; '84' -> {familia:'', numero:'84'} */
+function partirDispositivo(texto) {
+  var m = String(texto || '').toUpperCase().match(/^([A-Z]*)[-\s]*(\d+)$/);
+  return m ? { familia: m[1], numero: m[2] } : { familia: '', numero: '' };
+}
+/** Qué hacer con un elemento de la cola según lo que respondió la planilla.
+ *  Devuelve {accion: 'quitar' | 'revisar' | 'error', ...}. */
+function resolverRespuesta(item, j) {
+  if (item.tipo === 'manual') {
+    if (j.ok) return { accion: 'quitar', bloques: j.bloques, fecha: j.fecha };
+    if (j.conflicto) return { accion: 'revisar', avisos: j.conflicto };
+    return { accion: 'error', error: j.error || 'La planilla rechazó la carga.' };
+  }
+  if (!j.ok) return { accion: 'error', error: j.error || 'No se pudo leer la foto.' };
+  if (j.guardado) return { accion: 'quitar', bloques: j.bloques, fecha: j.fecha, resumen: j.resumen, turno: j.turno };
+  return { accion: 'revisar', avisos: j.avisos || [], resultado: { campos: j.campos, filaBloque: j.filaBloque,
+           filaCliente: j.filaCliente, turno: j.turno, fecha: j.fecha, bloques: j.bloques, fotoUrl: j.fotoUrl || '' } };
+}
+</script>
+
+<script>
+(function () {
+  var CLAVE_LS = 'cubetasFarmacia.v2';
+  var MAX_INTENTOS = 4;
+  var $ = function (id) { return document.getElementById(id); };
+  var api = '', turno = '', bloques = [], solapa = '';
+  var cola = [];                 // fotos y cargas que todavía no están en la planilla
+  var trabajando = false, sinRed = false;
+  var fotoPendiente = null;      // foto recién sacada, esperando el número de dispositivo
+  var enRevision = null;         // elemento de la cola abierto en la pantalla de revisión (o null = carga sin foto)
+  var revBloques = [];
+
+  // ---------- guardado en el teléfono ----------
+  function leerLS() { try { return JSON.parse(localStorage.getItem(CLAVE_LS) || '{}'); } catch (e) { return {}; } }
+  function guardarLS(cambios) {
+    try { var d = leerLS(); for (var k in cambios) d[k] = cambios[k]; localStorage.setItem(CLAVE_LS, JSON.stringify(d)); } catch (e) {}
+  }
+  var base = null;               // IndexedDB: ahí quedan las fotos aunque se cierre el navegador
+  function abrirBase() {
+    return new Promise(function (ok) {
+      try {
+        var p = indexedDB.open('cubetasFarmacia', 1);
+        p.onupgradeneeded = function () { p.result.createObjectStore('cola', { keyPath: 'id' }); };
+        p.onsuccess = function () { base = p.result; ok(); };
+        p.onerror = function () { ok(); };
+      } catch (e) { ok(); }
+    });
+  }
+  function enBase(modo, fn) {
+    return new Promise(function (ok) {
+      if (!base) return ok(null);
+      try {
+        var t = base.transaction('cola', modo), r = fn(t.objectStore('cola'));
+        t.oncomplete = function () { ok(r && r.result); };
+        t.onerror = t.onabort = function () { ok(null); };
+      } catch (e) { ok(null); }
+    });
+  }
+  function persistir(item) { return enBase('readwrite', function (s) { return s.put(item); }); }
+  function olvidar(item) {
+    cola = cola.filter(function (x) { return x.id !== item.id; });
+    return enBase('readwrite', function (s) { return s.delete(item.id); });
+  }
+
+  function llamar(datos) {
+    return fetch(api, { method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                        body: JSON.stringify(datos) })
+      .then(function (r) { return r.json(); });
+  }
+  function aviso(tipo, texto) { var a = $('aviso'); a.className = tipo || ''; a.textContent = texto; }
+  function mostrar(p) {
+    ['Config', 'Inicio', 'Dispositivo', 'Revision'].forEach(function (n) { $('pantalla' + n).classList.toggle('oculto', n !== p); });
+    window.scrollTo(0, 0);
+  }
+  function tomarBloques(j) {     // actualiza lo que se ve solo si la respuesta es de la solapa que está en pantalla
+    if (j && j.bloques && j.fecha === solapa) { bloques = j.bloques; guardarLS({ bloques: bloques, solapa: solapa }); }
+  }
+
+  // ---------- pantalla de inicio ----------
+  function pintar() {
+    $('subtitulo').textContent = solapa ? 'Solapa: ' + solapa : '—';
+    Array.prototype.forEach.call(document.querySelectorAll('#turnos button'), function (b) {
+      b.classList.toggle('activo', b.dataset.turno === turno);
+    });
+    // cola
+    var pendientes = cola.filter(function (x) { return x.estado === 'pendiente'; }).length;
+    var e = $('estadoCola');
+    e.className = pendientes && (sinRed || !navigator.onLine) ? 'mal' : '';
+    e.textContent = !pendientes ? '✓ Todo enviado a la planilla'
+      : (sinRed || !navigator.onLine) ? '⚠ Sin conexión: ' + pendientes + ' en cola. Están guardadas en el teléfono y se envían solas.'
+      : '⏳ Enviando ' + pendientes + '…';
+    // para revisar
+    var revisar = cola.filter(function (x) { return x.estado !== 'pendiente'; });
+    $('tarjetaRevisar').classList.toggle('oculto', !revisar.length);
+    $('cuentaRevisar').textContent = revisar.length;
+    var ul = $('listaRevisar');
+    ul.textContent = '';
+    revisar.forEach(function (x) {
+      var li = document.createElement('li'), d = document.createElement('div'), t = document.createElement('b'),
+          s = document.createElement('small'), b = document.createElement('button');
+      var reintentable = x.estado === 'error' && x.tipo === 'foto';
+      t.textContent = (x.dispositivo || 'sin dispositivo') + '  ·  ' + horaDe(x.hora);
+      s.textContent = x.estado === 'error' ? x.error : ((x.avisos || [])[0] || 'Falta confirmar los datos');
+      b.textContent = reintentable ? 'Reintentar' : 'Revisar'; b.className = 'chico primario';
+      b.onclick = function () {
+        if (reintentable) { x.estado = 'pendiente'; x.intentos = 0; persistir(x); pintar(); procesarCola(); }
+        else abrirRevision(x);
+      };
+      d.appendChild(t); d.appendChild(s); li.appendChild(d); li.appendChild(b); ul.appendChild(li);
+    });
+    // cargados
+    var cargados = bloques.filter(function (b) { return b.dispositivo || b.pedido; });
+    $('contador').textContent = cargados.length + ' de ' + bloques.length + ' repartos';
+    ul = $('listaCargados');
+    ul.textContent = '';
+    cargados.forEach(function (b) {
+      var li = document.createElement('li'), d = document.createElement('div'), t = document.createElement('b'),
+          s = document.createElement('small'), q = document.createElement('button');
+      var marcado = b.clientes.filter(function (c) { return c.x; })[0];
+      t.textContent = b.rep + '  ·  ' + (b.dispositivo || 'sin dispositivo');
+      s.textContent = (marcado ? marcado.nombre : 'sin cliente marcado') + ' · pedido ' + (b.pedido || '—') + ' · cubeta ' + (b.cubeta || '—');
+      q.textContent = 'Borrar'; q.className = 'chico';
+      q.onclick = function () { borrar(b); };
+      d.appendChild(t); d.appendChild(s); li.appendChild(d); li.appendChild(q); ul.appendChild(li);
+    });
+    if (!cargados.length) ul.innerHTML = '<li class="tenue">Todavía no hay cubetas cargadas en este turno.</li>';
+  }
+  function borrar(b) {
+    if (!window.confirm('¿Borrar lo cargado en el reparto ' + b.rep + '?')) return;
+    llamar({ accion: 'borrar', turno: turno, dia: diaDe(new Date()), filaBloque: b.fila }).then(function (j) {
+      if (!j.ok) throw new Error(j.error);
+      tomarBloques(j); pintar(); aviso('', 'Borrado.');
+    }).catch(function () { aviso('error', 'No se pudo borrar: hace falta conexión.'); });
+  }
+
+  // ---------- foto → dispositivo → cola ----------
+  function achicar(archivo) {
+    return new Promise(function (ok, mal) {
+      var url = URL.createObjectURL(archivo), img = new Image();
+      img.onload = function () {
+        var escala = Math.min(1, 1800 / Math.max(img.width, img.height));
+        var c = document.createElement('canvas');
+        c.width = Math.round(img.width * escala); c.height = Math.round(img.height * escala);
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+        URL.revokeObjectURL(url);
+        ok(c.toDataURL('image/jpeg', 0.85));
+      };
+      img.onerror = function () { URL.revokeObjectURL(url); mal(new Error('No se pudo abrir la foto.')); };
+      img.src = url;
+    });
+  }
+  function alSacarFoto() {
+    var archivo = $('foto').files[0];
+    $('foto').value = '';
+    if (!archivo) return;
+    achicar(archivo).then(function (dataUrl) {
+      fotoPendiente = dataUrl;
+      $('fotoNueva').src = dataUrl;
+      $('famNueva').value = leerLS().familia !== undefined ? leerLS().familia : 'F';
+      $('numNueva').value = '';
+      mostrar('Dispositivo');
+      $('numNueva').focus();
+    }).catch(function (e) { aviso('error', e.message); });
+  }
+  function nuevoId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+  function encolarFoto() {
+    var dispositivo = armarDispositivo($('famNueva').value, $('numNueva').value);
+    if (!dispositivo) { window.alert('Escribí el número del dispositivo.'); $('numNueva').focus(); return; }
+    guardarLS({ familia: $('famNueva').value });
+    var item = { id: nuevoId(), tipo: 'foto', estado: 'pendiente', imagen: fotoPendiente, dispositivo: dispositivo,
+                 turno: turno, dia: diaDe(new Date()), hora: Date.now(), intentos: 0 };
+    fotoPendiente = null;
+    cola.push(item);
+    persistir(item);
+    mostrar('Inicio');
+    aviso('ok', '✓ ' + dispositivo + ' en cola. Podés sacar la siguiente.');
+    if (navigator.vibrate) navigator.vibrate(60);
+    pintar();
+    procesarCola();
+  }
+
+  // ---------- envío en segundo plano ----------
+  function procesarCola() {
+    if (trabajando || !api) return;
+    var item = cola.filter(function (x) { return x.estado === 'pendiente'; })[0];
+    if (!item || !navigator.onLine) { pintar(); return; }
+    trabajando = true; pintar();
+    var pedido = item.tipo === 'manual'
+      ? llamar(item.datos)
+      : llamar({ accion: 'procesar', imagen: item.imagen.split(',')[1], dispositivo: item.dispositivo, turno: item.turno, dia: item.dia });
+    pedido.then(function (j) {
+      sinRed = false;
+      var r = resolverRespuesta(item, j);
+      if (r.accion === 'quitar') {
+        tomarBloques(r);
+        if (r.resumen) aviso('ok', '✓ Guardado: reparto ' + r.resumen.rep + ' · ' + item.dispositivo + ' · ' + r.resumen.cliente);
+        return olvidar(item);
+      }
+      item.estado = r.accion; item.avisos = r.avisos || []; item.error = r.error || '';
+      if (r.resultado) item.resultado = r.resultado;
+      if (r.accion === 'revisar') aviso('error', item.dispositivo + ': hay algo para revisar');
+      return persistir(item);
+    }, function () {
+      if (navigator.onLine) {                      // hay red pero la planilla no respondió bien
+        item.intentos = (item.intentos || 0) + 1;
+        if (item.intentos >= MAX_INTENTOS) { item.estado = 'error'; item.error = 'La planilla no respondió. Tocá Reintentar.'; }
+        persistir(item);
+      }
+      sinRed = true;
+    }).then(function () {
+      trabajando = false; pintar();
+      if (cola.some(function (x) { return x.estado === 'pendiente'; })) setTimeout(procesarCola, sinRed ? 8000 : 150);
+    });
+  }
+  window.addEventListener('online', function () { sinRed = false; procesarCola(); });
+  window.addEventListener('offline', pintar);
+
+  // ---------- revisión (lo dudoso, y la carga sin foto) ----------
+  function llenarClientes(filaCliente) {
+    var b = revBloques.filter(function (x) { return String(x.fila) === $('selBloque').value; })[0];
+    var sel = $('selCliente');
+    sel.textContent = '';
+    var vacio = document.createElement('option'); vacio.value = ''; vacio.textContent = b ? '— elegí el cliente —' : '— primero elegí el reparto —';
+    sel.appendChild(vacio);
+    (b ? b.clientes : []).forEach(function (c) {
+      var o = document.createElement('option'); o.value = c.fila; o.textContent = c.nombre + (c.codigo ? '  (' + c.codigo + ')' : '');
+      sel.appendChild(o);
+    });
+    sel.value = filaCliente ? String(filaCliente) : '';
+  }
+  function abrirRevision(item) {
+    enRevision = item;
+    var res = (item && item.resultado) || {};
+    var d = (item && item.datos) || {};
+    revBloques = res.bloques || bloques;
+    var img = $('miniatura');
+    img.classList.toggle('oculto', !(item && item.imagen));
+    if (item && item.imagen) img.src = item.imagen;
+    $('tituloRevision').textContent = item ? 'Revisá y completá' + (res.fecha ? ' · ' + res.fecha : '') : 'Carga sin foto · ' + solapa;
+    var sel = $('selBloque');
+    sel.textContent = '';
+    var vacio = document.createElement('option'); vacio.value = ''; vacio.textContent = '— elegí el reparto —'; sel.appendChild(vacio);
+    revBloques.forEach(function (b) {
+      var o = document.createElement('option'); o.value = b.fila;
+      o.textContent = b.rep + '  ·  ' + b.clientes.map(function (c) { return c.nombre; }).join(', ').slice(0, 60);
+      sel.appendChild(o);
+    });
+    sel.value = String(res.filaBloque || d.filaBloque || '');
+    llenarClientes(res.filaCliente || d.filaCliente);
+    var c = res.campos || d;
+    $('pedido').value = c.pedido || ''; $('cubeta').value = c.cubeta || ''; $('total').value = c.total || '';
+    var disp = partirDispositivo(item ? item.dispositivo : '');
+    var familia = item ? disp.familia : (leerLS().familia !== undefined ? leerLS().familia : 'F');
+    $('familia').value = familia === 'F' || familia === 'R' ? familia : '';
+    $('numero').value = disp.numero;
+    var ul = $('avisos'), lista = (item && item.avisos) || [];
+    if (item && item.estado === 'error') lista = [item.error];
+    ul.textContent = '';
+    lista.forEach(function (t) { var li = document.createElement('li'); li.textContent = t; ul.appendChild(li); });
+    ul.classList.toggle('oculto', !lista.length);
+    $('btnEliminar').classList.toggle('oculto', !item);
+    $('btnVolver').textContent = item ? 'Volver (queda para después)' : 'Cancelar';
+    $('btnGuardar').disabled = false;
+    mostrar('Revision');
+  }
+  function guardar(reemplazar) {
+    var dispositivo = armarDispositivo($('familia').value, $('numero').value);
+    if (!$('selBloque').value || !$('selCliente').value) { window.alert('Elegí el reparto y el cliente.'); return; }
+    if (!$('pedido').value.trim()) { window.alert('Falta el pedido.'); $('pedido').focus(); return; }
+    if (!dispositivo) { window.alert('Falta el número del dispositivo.'); $('numero').focus(); return; }
+    var item = enRevision, res = (item && item.resultado) || {};
+    var datos = { accion: 'guardar', filaBloque: Number($('selBloque').value), filaCliente: Number($('selCliente').value),
+                  dispositivo: dispositivo, pedido: $('pedido').value.trim(), cubeta: $('cubeta').value.trim(),
+                  total: $('total').value.trim(), turno: res.turno || (item && item.turno) || turno,
+                  dia: (item && item.dia) || diaDe(new Date()), fotoUrl: res.fotoUrl || '', reemplazar: !!reemplazar };
+    if (!item) guardarLS({ familia: $('familia').value });
+
+    if (!navigator.onLine) {                       // sin señal: queda en cola como carga manual y se envía sola
+      if (item) {
+        item.tipo = 'manual'; item.estado = 'pendiente'; item.dispositivo = dispositivo; item.datos = datos; item.avisos = [];
+      } else {
+        item = { id: nuevoId(), tipo: 'manual', estado: 'pendiente', dispositivo: dispositivo, datos: datos,
+                 turno: datos.turno, dia: datos.dia, hora: Date.now(), intentos: 0 };
+        cola.push(item);
+      }
+      persistir(item); mostrar('Inicio'); aviso('ok', '✓ ' + dispositivo + ' en cola (sin conexión).'); pintar();
+      return;
+    }
+    $('btnGuardar').disabled = true;
+    llamar(datos).then(function (j) {
+      if (j.conflicto) {
+        $('btnGuardar').disabled = false;
+        if (window.confirm(j.conflicto.join('\n') + '\n\n¿Guardar igual?')) guardar(true);
+        return;
+      }
+      if (!j.ok) throw new Error(j.error);
+      tomarBloques(j);
+      if (item) olvidar(item);
+      mostrar('Inicio'); pintar();
+      aviso('ok', '✓ Guardado: ' + dispositivo);
+      if (navigator.vibrate) navigator.vibrate(60);
+    }).catch(function (e) {
+      $('btnGuardar').disabled = false;
+      window.alert('No se pudo guardar: ' + (e.message || 'sin conexión') + '.');
+    });
+  }
+
+  // ---------- arranque ----------
+  function iniciar(desdeConfig) {
+    llamar({ accion: 'inicio', turno: turno, dia: diaDe(new Date()) }).then(function (j) {
+      if (!j.ok) throw new Error(j.error);
+      sinRed = false;
+      turno = j.turno; solapa = j.fecha; bloques = j.bloques;
+      guardarLS({ api: api, turno: turno, solapa: solapa, bloques: bloques });
+      mostrar('Inicio'); pintar(); procesarCola();
+    }).catch(function (e) {
+      if (desdeConfig) {
+        mostrar('Config');
+        $('configError').textContent = 'No se pudo conectar con la planilla (' + (e.message || 'sin conexión') + '). Revisá la dirección.';
+        return;
+      }
+      sinRed = true;                                // sin señal: se sigue con lo que quedó guardado en el teléfono
+      var g = leerLS();
+      if (!turno) turno = g.turno || (new Date().getHours() < 13 ? 'Mañana' : 'Tarde');
+      var esperada = diaDe(new Date()) + ' ' + turno;
+      bloques = g.solapa === esperada ? (g.bloques || []) : (g.bloques || []).map(function (b) {
+        return { fila: b.fila, rep: b.rep, dispositivo: '', pedido: '', cubeta: '',
+                 clientes: b.clientes.map(function (c) { return { fila: c.fila, nombre: c.nombre, codigo: c.codigo, x: false }; }) };
+      });
+      solapa = esperada;
+      mostrar('Inicio'); pintar();
+      aviso('', 'Sin conexión: podés seguir sacando fotos, se envían al volver la señal.');
+    });
+  }
+
+  Array.prototype.forEach.call(document.querySelectorAll('#turnos button'), function (b) {
+    b.onclick = function () { if (b.dataset.turno !== turno) { turno = b.dataset.turno; iniciar(false); } };
+  });
+  $('foto').onchange = alSacarFoto;
+  $('btnListo').onclick = encolarFoto;
+  $('numNueva').onkeydown = function (ev) { if (ev.key === 'Enter') encolarFoto(); };
+  $('btnDescartarFoto').onclick = function () { fotoPendiente = null; mostrar('Inicio'); };
+  $('btnSinFoto').onclick = function () { abrirRevision(null); };
+  $('selBloque').onchange = function () { llenarClientes(0); };
+  $('btnGuardar').onclick = function () { guardar(false); };
+  $('btnVolver').onclick = function () { mostrar('Inicio'); pintar(); };
+  $('btnEliminar').onclick = function () {
+    if (!enRevision || !window.confirm('¿Eliminar esta carga? No se va a guardar en la planilla.')) return;
+    olvidar(enRevision); mostrar('Inicio'); pintar();
+  };
+  $('btnDesconectar').onclick = function (ev) { ev.preventDefault(); $('apiUrl').value = api; mostrar('Config'); };
+  $('btnConectar').onclick = function () {
+    var url = $('apiUrl').value.trim();
+    if (!/^https:\/\/script\.google\.com\/.+\/exec$/.test(url)) {
+      $('configError').textContent = 'La dirección tiene que empezar con https://script.google.com/ y terminar en /exec';
+      return;
+    }
+    api = url; $('configError').textContent = 'Conectando…'; iniciar(true);
+  };
+
+  // Para que la página abra aunque no haya señal (solo cuando está publicada en un sitio propio, p. ej. GitHub Pages)
+  if ('serviceWorker' in navigator && location.protocol === 'https:' && !/google/.test(location.hostname)) {
+    navigator.serviceWorker.register('sw.js').catch(function () {});
+  }
+
+  if (window.API_URL && window.API_URL.indexOf('__') !== 0) api = window.API_URL;
+  var enHash = /[#&]api=([^&]+)/.exec(location.hash || '');
+  if (enHash) api = decodeURIComponent(enHash[1]);
+  if (!api) api = leerLS().api || '';
+  abrirBase().then(function () {
+    return enBase('readonly', function (s) { return s.getAll(); });
+  }).then(function (guardados) {
+    cola = (guardados || []).sort(function (a, b) { return a.hora - b.hora; });
+    if (api) { mostrar('Inicio'); pintar(); iniciar(false); } else mostrar('Config');
+  });
+})();
+</script>
+</body>
+</html>
