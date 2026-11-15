@@ -108,8 +108,16 @@
     <ul id="avisos" class="oculto"></ul>
     <label>Reparto</label>
     <select id="selBloque"></select>
-    <label>Cliente (lleva la X)</label>
-    <select id="selCliente"></select>
+    <div id="cajaCliente">
+      <label>Cliente (lleva la X)</label>
+      <select id="selCliente"></select>
+    </div>
+    <div id="cajaManual" class="oculto">
+      <label>Número del reparto (se agrega a la planilla de este turno)</label>
+      <input type="tel" id="repManual" class="fuerte" maxlength="6" autocomplete="off" placeholder="Por ejemplo 8123">
+      <label>Cliente</label>
+      <input type="text" id="clienteManual" autocomplete="off" placeholder="Nombre del cliente">
+    </div>
     <div class="fila">
       <div><label>Pedido (4 dígitos)</label><input type="tel" id="pedido" class="fuerte" maxlength="6" autocomplete="off"></div>
       <div class="angosto"><label>Cubeta</label><input type="tel" id="cubeta" class="fuerte" maxlength="2" autocomplete="off"></div>
@@ -134,6 +142,20 @@ function dosDigitos(n) { return (n < 10 ? '0' : '') + n; }
 function diaDe(fecha) { return dosDigitos(fecha.getDate()) + '-' + dosDigitos(fecha.getMonth() + 1) + '-' + fecha.getFullYear(); }
 function horaDe(ms) { var d = new Date(ms); return dosDigitos(d.getHours()) + ':' + dosDigitos(d.getMinutes()); }
 
+/** Turno que corresponde a una hora cuando no hay señal para preguntarle a la planilla:
+ *  Mañana se escanea de 22:00 a 06:00 (hasta las 08:00 se sigue tomando como Mañana); después, Tarde. */
+function turnoPorHora(hora) { return hora >= 22 || hora < 8 ? 'Mañana' : 'Tarde'; }
+/** Solapa y turno que corresponden a un momento, con las mismas reglas que la planilla: Mañana escaneado desde
+ *  las 22:00 es del día siguiente; el sábado solo hay Mañana; lo del domingo va al lunes a la mañana. */
+function solapaPorHora(fecha, turno) {
+  var d = new Date(fecha.getTime());
+  turno = turno || turnoPorHora(d.getHours());
+  if (turno === 'Mañana' && d.getHours() >= 22) d.setDate(d.getDate() + 1);
+  if (d.getDay() === 6) turno = 'Mañana';
+  if (d.getDay() === 0) { d.setDate(d.getDate() + 1); turno = 'Mañana'; }
+  return { solapa: diaDe(d) + ' ' + turno, turno: turno };
+}
+var REPARTO_MANUAL = 'manual';   // valor de la opción «Otro reparto (escribir el número)»
 /** 'F' + '054' -> 'F-54' ; '' + '84' -> '84' ; sin número -> '' */
 function armarDispositivo(familia, numero) {
   var n = parseInt(String(numero || '').replace(/\D/g, ''), 10);
@@ -269,7 +291,7 @@ function resolverRespuesta(item, j) {
   }
   function borrar(b) {
     if (!window.confirm('¿Borrar lo cargado en el reparto ' + b.rep + '?')) return;
-    llamar({ accion: 'borrar', turno: turno, dia: diaDe(new Date()), filaBloque: b.fila }).then(function (j) {
+    llamar({ accion: 'borrar', solapa: solapa, turno: turno, dia: diaDe(new Date()), momento: Date.now(), filaBloque: b.fila }).then(function (j) {
       if (!j.ok) throw new Error(j.error);
       tomarBloques(j); pintar(); aviso('', 'Borrado.');
     }).catch(function () { aviso('error', 'No se pudo borrar: hace falta conexión.'); });
@@ -329,7 +351,7 @@ function resolverRespuesta(item, j) {
     trabajando = true; pintar();
     var pedido = item.tipo === 'manual'
       ? llamar(item.datos)
-      : llamar({ accion: 'procesar', imagen: item.imagen.split(',')[1], dispositivo: item.dispositivo, turno: item.turno, dia: item.dia });
+      : llamar({ accion: 'procesar', imagen: item.imagen.split(',')[1], dispositivo: item.dispositivo, turno: item.turno, dia: item.dia, momento: item.hora });
     pedido.then(function (j) {
       sinRed = false;
       var r = resolverRespuesta(item, j);
@@ -359,6 +381,9 @@ function resolverRespuesta(item, j) {
 
   // ---------- revisión (lo dudoso, y la carga sin foto) ----------
   function llenarClientes(filaCliente) {
+    var manual = $('selBloque').value === REPARTO_MANUAL;
+    $('cajaManual').classList.toggle('oculto', !manual);
+    $('cajaCliente').classList.toggle('oculto', manual);
     var b = revBloques.filter(function (x) { return String(x.fila) === $('selBloque').value; })[0];
     var sel = $('selCliente');
     sel.textContent = '';
@@ -387,7 +412,10 @@ function resolverRespuesta(item, j) {
       o.textContent = b.rep + '  ·  ' + b.clientes.map(function (c) { return c.nombre; }).join(', ').slice(0, 60);
       sel.appendChild(o);
     });
-    sel.value = String(res.filaBloque || d.filaBloque || '');
+    var otro = document.createElement('option'); otro.value = REPARTO_MANUAL; otro.textContent = '➕ Otro reparto (escribir el número)';
+    sel.appendChild(otro);
+    sel.value = d.repManual ? REPARTO_MANUAL : String(res.filaBloque || d.filaBloque || '');
+    $('repManual').value = d.repManual || ''; $('clienteManual').value = d.clienteManual || '';
     llenarClientes(res.filaCliente || d.filaCliente);
     var c = res.campos || d;
     $('pedido').value = c.pedido || ''; $('cubeta').value = c.cubeta || ''; $('total').value = c.total || '';
@@ -407,11 +435,19 @@ function resolverRespuesta(item, j) {
   }
   function guardar(reemplazar) {
     var dispositivo = armarDispositivo($('familia').value, $('numero').value);
-    if (!$('selBloque').value || !$('selCliente').value) { window.alert('Elegí el reparto y el cliente.'); return; }
+    var manual = $('selBloque').value === REPARTO_MANUAL;
+    var repManual = $('repManual').value.replace(/\s/g, ''), clienteManual = $('clienteManual').value.trim();
+    if (manual) {
+      if (!/^\d+$/.test(repManual)) { window.alert('Escribí el número del reparto (solo dígitos).'); $('repManual').focus(); return; }
+      if (!clienteManual) { window.alert('Escribí el cliente del reparto.'); $('clienteManual').focus(); return; }
+    } else if (!$('selBloque').value || !$('selCliente').value) { window.alert('Elegí el reparto y el cliente.'); return; }
     if (!$('pedido').value.trim()) { window.alert('Falta el pedido.'); $('pedido').focus(); return; }
     if (!dispositivo) { window.alert('Falta el número del dispositivo.'); $('numero').focus(); return; }
     var item = enRevision, res = (item && item.resultado) || {};
-    var datos = { accion: 'guardar', filaBloque: Number($('selBloque').value), filaCliente: Number($('selCliente').value),
+    var datos = { accion: 'guardar', filaBloque: manual ? 0 : Number($('selBloque').value),
+                  filaCliente: manual ? 0 : Number($('selCliente').value),
+                  repManual: manual ? repManual : '', clienteManual: manual ? clienteManual : '',
+                  solapa: res.fecha || solapa, momento: (item && item.hora) || Date.now(),
                   dispositivo: dispositivo, pedido: $('pedido').value.trim(), cubeta: $('cubeta').value.trim(),
                   total: $('total').value.trim(), turno: res.turno || (item && item.turno) || turno,
                   dia: (item && item.dia) || diaDe(new Date()), fotoUrl: res.fotoUrl || '', reemplazar: !!reemplazar };
@@ -449,7 +485,7 @@ function resolverRespuesta(item, j) {
 
   // ---------- arranque ----------
   function iniciar(desdeConfig) {
-    llamar({ accion: 'inicio', turno: turno, dia: diaDe(new Date()) }).then(function (j) {
+    llamar({ accion: 'inicio', turno: turno, dia: diaDe(new Date()), momento: Date.now() }).then(function (j) {
       if (!j.ok) throw new Error(j.error);
       sinRed = false;
       turno = j.turno; solapa = j.fecha; bloques = j.bloques;
@@ -463,8 +499,9 @@ function resolverRespuesta(item, j) {
       }
       sinRed = true;                                // sin señal: se sigue con lo que quedó guardado en el teléfono
       var g = leerLS();
-      if (!turno) turno = g.turno || (new Date().getHours() < 13 ? 'Mañana' : 'Tarde');
-      var esperada = diaDe(new Date()) + ' ' + turno;
+      var destino = solapaPorHora(new Date(), turno);
+      turno = destino.turno;
+      var esperada = destino.solapa;
       bloques = g.solapa === esperada ? (g.bloques || []) : (g.bloques || []).map(function (b) {
         return { fila: b.fila, rep: b.rep, dispositivo: '', pedido: '', cubeta: '',
                  clientes: b.clientes.map(function (c) { return { fila: c.fila, nombre: c.nombre, codigo: c.codigo, x: false }; }) };
