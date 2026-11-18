@@ -87,6 +87,16 @@
     <button class="chico" id="linterna">🔦</button>
   </div>
 
+  <div class="tarjeta oculto" id="tarjetaDia">
+    <b>Planilla con escaneos de días anteriores</b>
+    <p class="tenue" id="textoDia" style="margin:6px 0 10px"></p>
+    <button class="primario" id="btnArchivar" style="width:100%">Pasar a solapas con fecha y empezar hoy</button>
+    <div class="fila" style="margin-top:8px">
+      <button id="btnBorrarDia" style="flex:1">Borrarlos</button>
+      <button id="btnDejarDia" style="flex:1">Dejar como está</button>
+    </div>
+  </div>
+
   <div id="aviso">Listo para escanear</div>
 
   <form class="fila tarjeta" id="formManual">
@@ -193,7 +203,7 @@ function nombreControl(fecha) {
   var CLAVE_LS = 'controlDispositivos.v1';
   var HORAS_CONTROL = 12;          // pasado este tiempo, al abrir arranca un control nuevo
   var $ = function (id) { return document.getElementById(id); };
-  var E = { api: '', control: '', inicio: 0, registros: [], anular: [], equipos: [],
+  var E = { api: '', control: '', inicio: 0, registros: [], anular: [], equipos: [], diaRespondido: '',
             cfg: { familiaPrincipal: 'RAMOS', porRenglon: 12, separador: ' - ' } };
   var indice = indexarEquipos([]);
   var enviando = false, redMal = false, ultimo = { texto: '', t: 0 };
@@ -364,6 +374,30 @@ function nombreControl(fecha) {
     familias.forEach(function (f) { var o = document.createElement('option'); o.textContent = f; sel.appendChild(o); });
   }
 
+  // ---------- cambio de día: qué hacer con lo de días anteriores en la planilla ----------
+  function hoyTexto() { var d = new Date(); return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate(); }
+  function ofrecerLimpieza(anteriores) {
+    var hay = anteriores && anteriores.cantidad > 0 && E.diaRespondido !== hoyTexto();
+    $('tarjetaDia').classList.toggle('oculto', !hay);
+    if (hay) {
+      $('textoDia').textContent = 'La planilla tiene ' + anteriores.cantidad + ' escaneos de ' + anteriores.dias.join(', ') +
+        '. Para que el panel consulte en Pointer solo lo de hoy, pasalos a solapas con su fecha (o borralos).';
+    }
+  }
+  function limpiar(modo) {
+    if (modo === 'borrar' && !window.confirm('¿Borrar de la planilla los escaneos de días anteriores?\nNo se pueden recuperar.')) return;
+    var botones = [$('btnArchivar'), $('btnBorrarDia'), $('btnDejarDia')];
+    botones.forEach(function (b) { b.disabled = true; });
+    llamar({ accion: 'limpiar', modo: modo, control: E.control }).then(function (j) {
+      E.diaRespondido = hoyTexto(); guardar();
+      $('tarjetaDia').classList.add('oculto');
+      aviso('ok', modo === 'borrar' ? 'Planilla lista para hoy' : 'Días anteriores archivados',
+            j.movidos + (modo === 'borrar' ? ' escaneos borrados' : ' escaneos pasaron a ' + j.solapas.join(', ')));
+    }).catch(function (e) {
+      aviso('error', 'No se pudo', (e.message || 'sin conexión') + '. Probá de nuevo con señal.');
+    }).then(function () { botones.forEach(function (b) { b.disabled = false; }); });
+  }
+
   // ---------- controles (rondas) ----------
   function nuevoControl(preguntar) {
     if (preguntar && E.registros.length &&
@@ -376,6 +410,7 @@ function nombreControl(fecha) {
     E.control = nombreControl(new Date()); E.inicio = Date.now(); E.registros = [];
     guardar(); pintar();
     $('aviso').className = ''; $('aviso').textContent = 'Control nuevo: listo para escanear';
+    iniciar(false);                                  // trae de nuevo la planilla y pregunta si hay días anteriores
   }
 
   // ---------- cámara ----------
@@ -480,6 +515,7 @@ function nombreControl(fecha) {
       });
       E.registros.sort(function (a, b) { return a.hora - b.hora; });
       listo();
+      ofrecerLimpieza(j.anteriores);
     }).catch(function (e) {
       if (desdeConfig || !E.equipos.length && !E.registros.length) {
         E.api = desdeConfig ? '' : E.api;
@@ -513,6 +549,9 @@ function nombreControl(fecha) {
   $('btnConectar').onclick = conectar;
   $('btnCamara').onclick = iniciarCamara;
   $('btnNuevo').onclick = function () { nuevoControl(true); };
+  $('btnArchivar').onclick = function () { limpiar('archivar'); };
+  $('btnBorrarDia').onclick = function () { limpiar('borrar'); };
+  $('btnDejarDia').onclick = function () { E.diaRespondido = hoyTexto(); guardar(); $('tarjetaDia').classList.add('oculto'); };
   $('formManual').onsubmit = manual;
   $('btnDesconectar').onclick = function (ev) { ev.preventDefault(); $('apiUrl').value = E.api; mostrar('config'); };
   $('btnCopiar').onclick = function () {
